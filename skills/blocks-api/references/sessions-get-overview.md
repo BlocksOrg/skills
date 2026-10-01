@@ -13,7 +13,7 @@ Do these in order and stop as soon as you have enough:
 ## 1. Fetch a session
 
 ```bash
-curl -s "$BASE_URL/rest/v1/sessions/$SESSION_ID" -H "$AUTH" > session.json
+curl -s "$BASE_URL/rest/v1/sessions/$SESSION_ID" -H "$AUTH" | tee session.json
 ```
 
 Useful fields: `title`, `pull_requests`, `source_url`, `is_archived`,

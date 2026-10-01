@@ -6,13 +6,14 @@ Do these in order and stop as soon as you have enough:
 
 1. Fetch the session for metadata and `plan_artifact_ids`.
 2. If there is a plan, read it first. It holds most of the useful information.
-3. Read the transcript overview (one call).
+3. Read the transcript overview (one call). The plan is written before
+   implementation, so what actually happened (fixes, PRs, outcomes) lives here.
 4. Pull tool calls only if you still need to know how something was done.
 
 ## 1. Fetch a session
 
 ```bash
-curl "$BASE_URL/rest/v1/sessions/$SESSION_ID" -H "$AUTH"
+curl -s "$BASE_URL/rest/v1/sessions/$SESSION_ID" -H "$AUTH" > session.json
 ```
 
 Useful fields: `title`, `pull_requests`, `source_url`, `is_archived`,
@@ -25,7 +26,7 @@ Useful fields: `title`, `pull_requests`, `source_url`, `is_archived`,
 at that plan's latest version, oldest plan first. Take the last entry.
 
 ```bash
-PLAN_ARTIFACT_ID=$(curl -s "$BASE_URL/rest/v1/sessions/$SESSION_ID" -H "$AUTH" | jq -r '.plan_artifact_ids[-1]')
+PLAN_ARTIFACT_ID=$(jq -r '.plan_artifact_ids[-1]' session.json)
 PLAN_URL=$(curl -s "$BASE_URL/rest/v1/sessions/$SESSION_ID/artifacts/$PLAN_ARTIFACT_ID" -H "$AUTH" | jq -r '.url')
 curl -s "$PLAN_URL"   # presigned, valid 6 days, NO Authorization header
 ```
@@ -56,7 +57,7 @@ make two calls, `?type=message&role=user` and `?type=message`, merge by `ts`.
 ## 4. More detail, only when needed
 
 - **Tool calls:** add `type=tool_call`, e.g. `?type=message&type=tool_call&role=user&role=assistant`.
-  `message` is a JSON string `{"__name__": "<tool>", "input": "<args>"}`. Invocation only, no result.
+  `message` is a JSON string `{"__name__": "<tool>", ...tool-specific args}`. Invocation only, no result.
 - **Outcomes only:** `?type=final_message` gives one completed reply per thread.
 - **One thread:** `?thread_id=<id>` or `/sessions/{id}/threads/{thread_id}/messages`.
 

@@ -1,7 +1,7 @@
 ---
 name: blocks-api
 description: >
-  Use when working with the `Blocks` to inspect existing agent sessions:
+  Use when working with `Blocks` to inspect existing agent sessions:
   fetch a session by ID, read its transcript (user prompts and assistant replies),
   and drill into tool calls when more detail is needed. Trigger on "Blocks session",
   "Blocks API", "fetch blocks session transcript" or any request to read what a
@@ -34,7 +34,7 @@ Read the file for the task at hand. Each one is a complete, ordered walkthrough.
 
 | Status | Meaning |
 | --- | --- |
-| 401 | Missing or malformed `Authorization` header |
-| 403 | Bad key, or key for a different environment |
+| 401 | Missing `Authorization` header |
+| 403 | Malformed header (e.g. `Bearer`), bad key, or key for a different environment |
 | 404 | Session not in your workspace, or artifact not attached to it |
 | 422 | Bad `limit`, `page`, `type`, `role`, `direction`, non-UUID id, comma lists |

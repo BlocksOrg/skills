@@ -1,4 +1,16 @@
+<p align="center">
+  <a href="https://blocks.team">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/blocks-logo-dark.svg">
+      <img alt="Blocks" src=".github/assets/blocks-logo-light.svg" width="220">
+    </picture>
+  </a>
+</p>
+
 # Blocks Agent Skills
+
+[![CI](https://github.com/BlocksOrg/skills/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/BlocksOrg/skills/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
 Installable `SKILL.md` skills for working with the [Blocks](https://blocks.team) REST API from AI coding agents.
 

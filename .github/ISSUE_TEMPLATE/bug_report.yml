@@ -1,0 +1,37 @@
+name: Bug report
+description: A skill gives wrong instructions or an example does not work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Keep it short and specific.
+  - type: input
+    id: skill
+    attributes:
+      label: Skill
+      description: The skill directory, e.g. `blocks-api`, and the reference file if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: Request and response
+      description: The API call you made and what came back. Reference the key, never paste it.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: agent
+    attributes:
+      label: Agent and installer
+      description: e.g. `Claude Code`, installed with `npx skills add --global`.
+    validations:
+      required: false

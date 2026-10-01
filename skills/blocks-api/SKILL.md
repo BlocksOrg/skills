@@ -1,11 +1,11 @@
 ---
 name: blocks-api
 description: >
-  Use when working with the Blocks REST API to inspect existing agent sessions:
+  Use when working with the `Blocks` to inspect existing agent sessions:
   fetch a session by ID, read its transcript (user prompts and assistant replies),
   and drill into tool calls when more detail is needed. Trigger on "Blocks session",
-  "Blocks API", "fetch session transcript", "session ID", or any request to read
-  what a Blocks agent did in a session. Requires BLOCKS_API_KEY.
+  "Blocks API", "fetch blocks session transcript" or any request to read what a
+  Blocks agent did in a session. Requires BLOCKS_API_KEY.
 license: MIT
 metadata:
   version: "0.1.0"

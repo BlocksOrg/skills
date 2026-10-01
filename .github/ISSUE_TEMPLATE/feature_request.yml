@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a new skill or an addition to an existing one
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to get an agent to do with Blocks that the skills make hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: A new skill, a new reference playbook, a changed recommendation — whatever you have in mind.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this isn't a duplicate.
+          required: true
+        - label: I checked the existing skills and the Blocks docs and this isn't already covered.
+          required: true

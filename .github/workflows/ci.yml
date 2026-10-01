@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Lints the workflow files themselves: unknown runner labels, bad expressions,
+  # shellcheck over every `run:` block. A workflow that fails to parse posts no
+  # check-run at all, so nothing else in this file would ever catch it.
+  actionlint:
+    name: Lint workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ACTIONLINT_VERSION: 1.7.12
+      # sha256 of actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz, from the
+      # release's published checksums file.
+      ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Install actionlint
+        run: |
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$tarball" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          echo "${ACTIONLINT_SHA256}  ${tarball}" | sha256sum --check --strict -
+          tar -xzf "$tarball" actionlint
+      - run: ./actionlint -color
+
+  # Every skill must be discoverable by `npx skills add`, its frontmatter name
+  # must match its directory, and nothing in the repo may leak a real key or an
+  # internal host. The install script must at least parse.
+  validate:
+    name: Validate skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SKILLS_CLI_VERSION: 1.7.0
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+      - name: Frontmatter name matches directory
+        run: |
+          set -euo pipefail
+          status=0
+          for file in skills/*/SKILL.md; do
+            dir=$(basename "$(dirname "$file")")
+            name=$(sed -n 's/^name:[[:space:]]*//p' "$file" | head -n1 | tr -d '"'"'"'')
+            if [ "$name" != "$dir" ]; then
+              echo "::error file=$file::frontmatter name '$name' does not match directory '$dir'"
+              status=1
+            fi
+            if ! grep -q '^description:' "$file"; then
+              echo "::error file=$file::frontmatter is missing a description"
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: skills CLI discovers every skill
+        run: |
+          set -euo pipefail
+          listing=$(npx --yes "skills@${SKILLS_CLI_VERSION}" add . --list 2>&1 | sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g')
+          echo "$listing"
+          status=0
+          for dir in skills/*/; do
+            name=$(basename "$dir")
+            if ! printf '%s\n' "$listing" | grep -qE "^[^A-Za-z0-9_-]*${name}[[:space:]]*$"; then
+              echo "::error::skills CLI did not list '$name'"
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: No real keys or internal hosts
+        run: |
+          set -euo pipefail
+          if grep -rnE 'ApiKey [A-Za-z0-9_-]{30,}|api\.dev\.blocks\.team|appdev\.blocks\.team' \
+               --exclude-dir=.git --exclude-dir=.github .; then
+            echo "::error::found what looks like a real API key or an internal host"
+            exit 1
+          fi
+      - name: install.sh parses
+        run: sh -n install.sh

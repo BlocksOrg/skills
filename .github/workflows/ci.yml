@@ -35,7 +35,8 @@ jobs:
 
   # Every skill must be discoverable by `npx skills add`, its frontmatter name
   # must match its directory, and nothing in the repo may leak a real key or an
-  # internal host. The install script must at least parse.
+  # internal host. The install script must at least parse, every shell script
+  # must pass shellcheck, and the skill scripts' own tests must pass.
   validate:
     name: Validate skills
     runs-on: ubuntu-latest
@@ -88,3 +89,7 @@ jobs:
           fi
       - name: install.sh parses
         run: sh -n install.sh
+      - name: shellcheck scripts
+        run: shellcheck install.sh skills/*/scripts/*.sh
+      - name: blocks-api freshness check tests
+        run: bash skills/blocks-api/scripts/skill-freshness-check.test.sh

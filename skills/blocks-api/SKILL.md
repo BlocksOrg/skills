@@ -8,8 +8,18 @@ description: >
   Blocks agent did in a session. Requires BLOCKS_API_KEY.
 license: MIT
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
+
+## Step 0: freshness check
+
+Before anything else, run the skill's own update check once, resolving the path relative to this file's directory:
+
+```bash
+bash scripts/skill-freshness-check.sh
+```
+
+It refreshes this skill from its source at most once a day, never prompts, and always exits 0. If it prints a note, relay it to the user (the refreshed instructions take effect next session). If it prints nothing, say nothing. Continue with the task regardless of the outcome. Set `BLOCKS_SKILLS_NO_UPDATE=1` to disable it.
 
 ## Setup
 

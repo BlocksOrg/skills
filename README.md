@@ -36,6 +36,8 @@ npx skills add https://github.com/BlocksOrg/skills --skill blocks-api --global
 
 Omit `--global` to install into the current project instead of your home directory.
 
+Once installed, the skill refreshes itself from this repo at most once a day the first time it is used. Set `BLOCKS_SKILLS_NO_UPDATE=1` to disable that.
+
 One-liner alternative:
 
 ```bash

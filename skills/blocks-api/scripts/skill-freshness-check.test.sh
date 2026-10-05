@@ -30,8 +30,10 @@ script="$skill_dir/scripts/skill-freshness-check.sh"
 #   fail     print the CLI's failure wording, exit 0 (as the real CLI does)
 #   exit1    exit non-zero without saying anything
 #   missing  print the CLI's "not installed" message, exit 0
+#   hang     spawn a long sleep (pid written to $hung_pid) and wait on it
 calls="$tmp/calls"
 mode="$tmp/mode"
+hung_pid="$tmp/hung-pid"
 fake="$tmp/fake-update.sh"
 cat > "$fake" <<FAKE
 #!/bin/sh
@@ -42,6 +44,7 @@ case \$(cat "$mode") in
   fail)    echo "  ✗ Failed to check skills from BlocksOrg/skills" ;;
   exit1)   exit 1 ;;
   missing) echo "No installed skills found matching: blocks-api" ;;
+  hang)    sleep 300 & echo \$! > "$hung_pid"; wait ;;
 esac
 exit 0
 FAKE
@@ -60,6 +63,8 @@ run() { # run <now> -> sets $out and $rc
   out=$(BLOCKS_SKILLS_NOW=$1 bash "$script" 2>"$tmp/stderr")
   rc=$?
 }
+
+not_running() { ! kill -0 "$1" 2>/dev/null; }
 
 call_count() {
   if [ -f "$calls" ]; then wc -l < "$calls" | tr -d ' '; else echo 0; fi
@@ -162,6 +167,22 @@ check "untracked install exits 0" [ "$rc" -eq 0 ]
 check "untracked install prints nothing" [ -z "$out" ]
 run $((T0 + 16 * MIN))
 check "untracked install is not retried after 15 minutes" [ "$(call_count)" -eq 1 ]
+
+# --- a stalled update is killed at the deadline and counted as a failure ---------
+reset
+echo hang > "$mode"
+started=$(date +%s)
+BLOCKS_SKILLS_TIMEOUT=2 run $T0
+elapsed=$(( $(date +%s) - started ))
+check "stalled update exits 0" [ "$rc" -eq 0 ]
+check "stalled update prints nothing" [ -z "$out" ]
+check "stalled update returns within the deadline (took ${elapsed}s)" [ "$elapsed" -le 10 ]
+check "stalled update's whole process tree is killed" not_running "$(cat "$hung_pid")"
+run $((T0 + 5 * MIN))
+check "stalled update counts as a failure (no retry at 5m)" [ "$(call_count)" -eq 1 ]
+echo ok > "$mode"
+run $((T0 + 16 * MIN))
+check "stalled update is retried after 15 minutes" [ "$(call_count)" -eq 2 ]
 
 # --- opt-out --------------------------------------------------------------------
 reset

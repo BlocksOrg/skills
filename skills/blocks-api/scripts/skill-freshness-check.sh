@@ -17,6 +17,7 @@
 #   BLOCKS_SKILLS_DEBUG=1       log every decision to stderr
 #   BLOCKS_SKILLS_NOW           override the clock (epoch seconds), for tests
 #   BLOCKS_SKILLS_UPDATE_CMD    override the update command, for tests
+#   BLOCKS_SKILLS_TIMEOUT       override the update deadline (seconds), for tests
 #   BLOCKS_SKILLS_ROOT          override the detected scope root, for tests
 #   XDG_CACHE_HOME              marker files live under $XDG_CACHE_HOME/blocks-skills
 #                               (defaults to ~/.cache)
@@ -27,7 +28,7 @@ SKILLS_CLI_VERSION="1.7.0"
 SUCCESS_INTERVAL=86400   # 24h: do not re-check after a success
 RETRY_INTERVAL=900       # 15m: retry after a failure
 MAX_FAILURES=3           # after this many failures in a row, retry daily
-UPDATE_TIMEOUT=120       # seconds; only enforced where `timeout` exists
+UPDATE_TIMEOUT=120       # seconds before a stalled update is killed
 
 log() {
   if [ -n "${BLOCKS_SKILLS_DEBUG:-}" ]; then
@@ -149,21 +150,56 @@ if [ -z "${BLOCKS_SKILLS_UPDATE_CMD:-}" ] && ! command -v npx >/dev/null 2>&1; t
   exit 0
 fi
 
-runner=""
-if command -v timeout >/dev/null 2>&1; then
-  runner="timeout $UPDATE_TIMEOUT"
-fi
+deadline=${BLOCKS_SKILLS_TIMEOUT:-$UPDATE_TIMEOUT}
+case $deadline in
+  ''|*[!0-9]*) deadline=$UPDATE_TIMEOUT ;;
+esac
+
+# Run a command with a deadline using only bash builtins, so the guarantee
+# holds on systems without coreutils' `timeout` (stock macOS, for one).
+# Job control puts the child and the watchdog in their own process groups,
+# which lets us take down the whole npx/node tree rather than just the
+# wrapping shell. Returns the command's exit code, or 124 on the deadline.
+run_with_deadline() { # run_with_deadline <seconds> <output-file> <command>
+  set -m
+  ( cd "$root" && exec sh -c "$3" ) > "$2" 2>&1 </dev/null &
+  child=$!
+  (
+    sleep "$1"
+    : > "$2.timeout"
+    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null
+    sleep 1
+    kill -KILL -- "-$child" 2>/dev/null || kill -KILL "$child" 2>/dev/null
+  ) >/dev/null 2>&1 </dev/null &
+  watchdog=$!
+  set +m
+  wait "$child" 2>/dev/null
+  status=$?
+  kill -KILL -- "-$watchdog" 2>/dev/null || kill -KILL "$watchdog" 2>/dev/null
+  wait "$watchdog" 2>/dev/null
+  if [ -f "$2.timeout" ]; then
+    rm -f "$2.timeout" 2>/dev/null
+    return 124
+  fi
+  return "$status"
+}
 
 last_attempt=$now
 write_marker
 
 before=$(fingerprint)
-log "running: $update_cmd (in $root)"
-# shellcheck disable=SC2086  # $runner is intentionally word-split
-output=$(cd "$root" && $runner sh -c "$update_cmd" 2>&1 </dev/null)
+log "running: $update_cmd (in $root, deadline ${deadline}s)"
+output_file="$marker.$$.out"
+run_with_deadline "$deadline" "$output_file" "$update_cmd"
 rc=$?
+output=$(cat "$output_file" 2>/dev/null)
+rm -f "$output_file" 2>/dev/null
 after=$(fingerprint)
-log "update exit code: $rc"
+if [ "$rc" -eq 124 ]; then
+  log "update killed after ${deadline}s"
+else
+  log "update exit code: $rc"
+fi
 if [ -n "${BLOCKS_SKILLS_DEBUG:-}" ]; then
   esc=$(printf '\033')
   printf '%s\n' "$output" | sed "s/$esc\[[0-9;?]*[a-zA-Z]//g; s/^/skill-freshness-check: | /" >&2

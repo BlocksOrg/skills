@@ -31,6 +31,7 @@ script="$skill_dir/scripts/skill-freshness-check.sh"
 #   exit1    exit non-zero without saying anything
 #   missing  print the CLI's "not installed" message, exit 0
 #   hang     spawn a long sleep (pid written to $hung_pid) and wait on it
+#   slow     sleep a second, then report "up to date"
 calls="$tmp/calls"
 mode="$tmp/mode"
 hung_pid="$tmp/hung-pid"
@@ -45,6 +46,7 @@ case \$(cat "$mode") in
   exit1)   exit 1 ;;
   missing) echo "No installed skills found matching: blocks-api" ;;
   hang)    sleep 300 & echo \$! > "$hung_pid"; wait ;;
+  slow)    sleep 1; echo "✓ All global skills are up to date" ;;
 esac
 exit 0
 FAKE
@@ -183,6 +185,34 @@ check "stalled update counts as a failure (no retry at 5m)" [ "$(call_count)" -e
 echo ok > "$mode"
 run $((T0 + 16 * MIN))
 check "stalled update is retried after 15 minutes" [ "$(call_count)" -eq 2 ]
+
+# --- concurrent sessions run the update once ------------------------------------
+reset
+echo slow > "$mode"
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  BLOCKS_SKILLS_NOW=$T0 bash "$script" > "$tmp/concurrent.$i" 2>&1 &
+done
+concurrent_rc=0
+wait || concurrent_rc=$?
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  [ -s "$tmp/concurrent.$i" ] && concurrent_rc=1
+done
+check "10 concurrent first runs invoke the update once" [ "$(call_count)" -eq 1 ]
+check "10 concurrent first runs all exit 0 silently" [ "$concurrent_rc" -eq 0 ]
+lock="$XDG_CACHE_HOME/blocks-skills/$(printf '%s' "$(cd "$root" && pwd -P)" | cksum | cut -d' ' -f1)/blocks-api.lock"
+check "the lock is released afterwards" [ ! -e "$lock" ]
+
+# --- a held lock makes the run skip; a stale one is taken over ------------------
+reset
+mkdir -p "$lock"
+run $T0
+check "held lock exits 0" [ "$rc" -eq 0 ]
+check "held lock skips the update" [ "$(call_count)" -eq 0 ]
+check "held lock is left for its owner" [ -d "$lock" ]
+touch -t 202001010000 "$lock"
+run $T0
+check "stale lock is taken over and the update runs" [ "$(call_count)" -eq 1 ]
+check "stale lock is released afterwards" [ ! -e "$lock" ]
 
 # --- opt-out --------------------------------------------------------------------
 reset

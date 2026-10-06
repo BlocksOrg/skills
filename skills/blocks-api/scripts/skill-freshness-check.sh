@@ -11,6 +11,7 @@
 #   - after a successful check, stay quiet for 24 hours
 #   - after a failed check, retry 15 minutes later
 #   - after 3 consecutive failures, back off to one attempt per day
+#   - concurrent runs share a lock; only the first one checks, the rest skip
 #
 # Environment:
 #   BLOCKS_SKILLS_NO_UPDATE=1   opt out entirely (exit 0 immediately)
@@ -89,6 +90,34 @@ if ! mkdir -p "$marker_dir" 2>/dev/null; then
   exit 0
 fi
 
+deadline=${BLOCKS_SKILLS_TIMEOUT:-$UPDATE_TIMEOUT}
+case $deadline in
+  ''|*[!0-9]*) deadline=$UPDATE_TIMEOUT ;;
+esac
+
+# --- lock ---------------------------------------------------------------------
+# Several agent sessions can start at the same moment. `mkdir` is atomic, so
+# whoever creates the lock directory reads the marker and runs the update;
+# everyone else skips straight away rather than waiting. A lock older than the
+# update deadline plus a minute belongs to a run that was killed, so take it
+# over.
+lock="$marker.lock"
+if ! mkdir "$lock" 2>/dev/null; then
+  stale_after=$(( (deadline + 60 + 59) / 60 ))   # minutes, rounded up
+  if [ -n "$(find "$lock" -maxdepth 0 -mmin +"$stale_after" 2>/dev/null)" ]; then
+    log "taking over stale lock $lock"
+    rmdir "$lock" 2>/dev/null
+    if ! mkdir "$lock" 2>/dev/null; then
+      log "lost the race for $lock; skipping"
+      exit 0
+    fi
+  else
+    log "another check holds $lock; skipping"
+    exit 0
+  fi
+fi
+trap 'rmdir "$lock" 2>/dev/null' EXIT
+
 now=${BLOCKS_SKILLS_NOW:-$(date +%s)}
 case $now in
   ''|*[!0-9]*) log "invalid clock value '$now'; skipping"; exit 0 ;;
@@ -149,11 +178,6 @@ if [ -z "${BLOCKS_SKILLS_UPDATE_CMD:-}" ] && ! command -v npx >/dev/null 2>&1; t
   log "npx not found on PATH; skipping"
   exit 0
 fi
-
-deadline=${BLOCKS_SKILLS_TIMEOUT:-$UPDATE_TIMEOUT}
-case $deadline in
-  ''|*[!0-9]*) deadline=$UPDATE_TIMEOUT ;;
-esac
 
 # Run a command with a deadline using only bash builtins, so the guarantee
 # holds on systems without coreutils' `timeout` (stock macOS, for one).
